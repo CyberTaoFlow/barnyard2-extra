@@ -1443,7 +1443,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
         /* XXX */
         return 1;
     }
-    
+   
     memset(&unInitSig,'\0',sizeof(cacheSignatureObj));
     
     *psig_id = 0;
@@ -1929,7 +1929,7 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 	{
 	    goto bad_query;
 	}
-	
+
 	break;
     }
  
@@ -2575,7 +2575,13 @@ TransacRollback:
                 {
                 FatalError("[dbDNSData()]: Failed, processing stopped!\n");
                 } 
-	
+
+#endif
+
+#ifdef QUADRANT
+
+	dbQuadrant(p,data,sid);
+
 #endif
 
     	if( dbProcessSignatureInformation(data,event,event_type,&sig_id))
@@ -2650,6 +2656,14 @@ TransacRollback:
     
     }
 #endif    
+
+/*
+#ifdef QUADRANT
+
+        dbQuadrant(data, sid, p);
+
+#endif 
+*/
 
 
     if(CommitTransaction(data))
@@ -5737,3 +5751,235 @@ return 0;
 }
 #endif
 
+
+#ifdef QUADRANT
+
+int dbQuadrant(Packet *p, DatabaseData *data, u_int32_t sig_sid)
+{
+
+        if ( p == NULL || data == NULL )
+                {
+                return 0;               
+                } 
+
+	DatabaseCleanInsert(data);
+
+	if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+		"UPDATE sensor SET events_count = events_count+1 where sid = %u", 
+		data->sid ) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+                }
+
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif                  
+                FatalError("%s() at line %u : Insert() failed.\n", __FUNCTION__, __LINE__);
+                }
+
+	if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+		"UPDATE signature SET events_count = events_count+1 WHERE sig_id = %lu", 
+		(unsigned long)sig_sid ) ) != SNORT_SNPRINTF_SUCCESS )
+		{
+		FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+		}
+
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif          
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+	if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+		"INSERT INTO events_ipsrc_sig_48hr VALUES ('%lu', %u, %u, %lu, now() )",
+		(u_long)ntohl(p->iph->ip_src.s_addr), data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+		{
+		FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+		}
+
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+
+	if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+		"INSERT INTO tmp_events_24 (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+		data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+		{
+		FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+		}
+
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "INSERT INTO tmp_events_today (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+                data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);                  
+                }                                                                                                                      
+                
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "INSERT INTO tmp_events_yesterday (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+                data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);                  
+                }                                                                                                                      
+                
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "INSERT INTO tmp_events_week (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+                data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+                }
+        
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif          
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "INSERT INTO tmp_events_month (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+                data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+                }
+                
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif          
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "INSERT INTO tmp_events_quarter (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+                data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+                }
+                
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif          
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "INSERT INTO tmp_events_year (sid, cid ,signature ,timestamp ) VALUES ( %u, %u, %lu, now() )",
+                data->sid, data->cid, (unsigned long)sig_sid) ) != SNORT_SNPRINTF_SUCCESS )
+                {
+                FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+                }
+                
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif          
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+
+/*
+	if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+		"UPDATE events_ipsrc_sig_48hr SET ip_src = %lu where sid = %u and cid = %u",
+		(u_long)p->iph->ip_src.s_addr, data->sid, data->cid) ) != SNORT_SNPRINTF_SUCCESS )
+		{
+		FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+		}
+
+	if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+*/
+
+        if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                "DELETE FROM ip_src_unique_signatures") ) != SNORT_SNPRINTF_SUCCESS )
+                {
+		FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+		}
+
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+
+	if ( ( SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+		"INSERT INTO `ip_src_unique_signatures` select '', e.ip_src, count(distinct(e.sig_id)), now() FROM events_ipsrc_sig_48hr e GROUP BY ip_src") ) != SNORT_SNPRINTF_SUCCESS )
+		{
+		FatalError("%s() at line %u : SnortSnprintf failed for data->SQL_INSERT\n", __FUNCTION__, __LINE__);
+		}
+
+        if (Insert(data->SQL_INSERT, data, 1) != 0)
+                {
+#ifdef ENABLE_DB_TRANSACTIONS
+                LogMessage("%s() at line %u Insert() failed,  Rolling back transaction!\n", __FUNCTION__, __LINE__);
+                RollbackTransaction(data);
+#endif
+                FatalError("%s() at line %u : Insert() (UPDATE) failed.\n", __FUNCTION__, __LINE__);
+                }
+
+
+return 0; 
+
+}
+
+#endif

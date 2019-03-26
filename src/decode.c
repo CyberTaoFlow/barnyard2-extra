@@ -2715,11 +2715,11 @@ void DecodeIP(const uint8_t * pkt, const uint32_t len, Packet * p)
      * with datalink DLT_RAW it's impossible to differ ARP datagrams from IP.
      * So we are just ignoring non IP datagrams
      */
-    if(IP_VER(p->iph) != 4)
+    if(IP_VER(p->iph) != 4 && IP_VER(p->iph) != 6)
     {
         if (BcLogVerbose())
         {
-            ErrorMessage("Not IPv4 datagram! "
+            ErrorMessage("Not IPv4 or IPv6 datagram!"
                     "([ver: 0x%x][len: 0x%x])\n", 
                     IP_VER(p->iph), p->iph->ip_len);
         }
@@ -4078,7 +4078,7 @@ void DecodeIPV6Options(int type, const uint8_t *pkt, uint32_t len, Packet *p)
     if(p->ip6_extension_count < IP6_EXTMAX)
     {
 
-    	if ( (p->ip6_extension_count == 0)	
+    	if ( (p->ip6_extension_count == 0) )
 		{
         	p->ip6_extensions[p->ip6_extension_count].type = type;
         	p->ip6_extensions[p->ip6_extension_count].data = pkt;
